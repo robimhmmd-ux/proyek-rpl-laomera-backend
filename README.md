@@ -1,134 +1,200 @@
-# SkinCheck — Backend (API-only, Python / FastAPI)
+# Laomera — Aplikasi Web Deteksi Kesehatan Kulit Wajah Berbasis AI
 
-This is the **backend half** of the split SkinCheck project. It is a
-JSON-only FastAPI API for the separate Next.js frontend repo. It is
-split from the monolith at commit `5d006e7` of
-`robimhmmd-ux/SkinCheck-AI` (the monolith is read-only for this split;
-this backend was copied from it, not edited in place).
+## Identitas
 
-What changed in the split:
-- **Removed:** Jinja templates (`app/views/`), static assets
-  (`app/static/`), HTML routes. Static files and pages are now the
-  frontend repo's job — this backend serves no HTML and no `/static`.
-- **Kept:** SQLAlchemy models, DB config (MySQL/TiDB with TLS),
-  auth utils (bcrypt session auth), services, `setup_db.py`,
-  `seed_products.py`, and `skincheck_setup.sql`.
-- **Added:** `app/routes/json_api.py` — the `/api/v2` JSON API.
-- **Not mounted:** the legacy HTML routers/controllers are still on
-  disk under `app/routes/` / `app/controllers/` as reference, but
-  `app/routes/__init__.py` does not import them and `app/main.py`
-  does not mount them, because they render templates that no longer
-  exist here. Do not re-mount them without restoring the template layer.
+| | |
+|---|---|
+| **Nama** | Robi Wahyudi |
+| **NIM** | `41257156` |
+| **Kelompok** | `Cangkol Perangkat Lunak` |
+| **Tema Topik Kelompok** | `aplikasi kesehatan wajah berbasis web` |
+| **Mata Kuliah** | Rekayasa Perangkat Lunak (TIKB2503021), Semester 3 |
+| **Dosen Pengampu** | Yudhistira Arie Wijaya, M.Kom., CDS. |
+| **Perguruan Tinggi** | STMIK IKMI Cirebon |
 
-## API v2 (all JSON, never TemplateResponse)
+## Deskripsi Aplikasi
 
-Base: the API root is the FastAPI app itself; v2 lives under `/api/v2`.
-Legacy `/api/v1/health` is also kept.
+**Laomera** (sebelumnya bernama SkinCheck AI) adalah aplikasi web yang
+membantu pengguna memahami kondisi kesehatan kulit wajahnya sendiri secara
+personal dan non-invasif — sebagai alat bantu edukasi dan indikasi visual
+awal, **bukan alat medis dan bukan pengganti konsultasi dokter kulit**.
 
-| Method & path | Auth | What it does |
-|---|---|---|
-| `GET /api/v2/health` | public | Mirrors `/api/v1/health`. No DB access. |
-| `POST /api/v2/auth/login` | public | `{email, password}` → `{user:{id,name,email,role}}` or 401. Sets `request.session["user"]` exactly like the monolith's `AuthController.handle_customer_login`, and logs an `ActivityLog` row. |
-| `POST /api/v2/auth/register` | public | `{name, email, password, skin_concerns?}` → 201 `{user}` + session. **Direct registration (OTP bypass).** The monolith's OTP email flow stays in the monolith for now; this endpoint mirrors its `REGISTRATION_OTP_MODE=bypass` branch. Skin concerns are stored in `users.profile_data` JSON (the `User` model has no `phone`/`skin_concerns` columns). Duplicate email → 409. Password < 6 chars → 400. |
-| `POST /api/v2/auth/logout` | session | Clears the session. |
-| `GET /api/v2/me` | session or 401 | Current session user. No DB access. |
-| `GET /api/v2/dashboard` | customer | Latest scan + last 10 scans with analysis scores. |
-| `GET /api/v2/history` | customer | Own scans, most recent first (`?limit=`, default 50, max 100), each with its analysis summary or `null`. |
-| `GET /api/v2/history/{id}` | customer | One own scan + analysis, or 404 (404 also covers "belongs to another user", so ownership is not leaked). |
-| `POST /api/v2/scan/upload` | customer, multipart `file` | Validates + stores the image via `ImageService.process_and_save_scan`, creates a `SkinScan` row with `status="processing"`, returns `{scan_id, status}`. **No AI analysis is run here** and `ai_service` is never imported, so TensorFlow / the `.h5` model are not required. A follow-up endpoint must pick up `processing` rows and run the model. |
-| `GET /api/v2/products` | public | Active products list. DB down → 503 JSON, not 500 HTML. |
-| `GET /api/v2/admin/summary` | admin | Counts: `users`, `scans`, `products`, `active_products`. Non-admin → 403, logged out → 401. |
+Pengguna cukup memakai kamera HP atau laptop untuk scan wajah. Sistem
+menganalisis foto wajah dan menampilkan skor untuk lima kondisi kulit,
+menyimpan riwayat scan untuk dibandingkan dari waktu ke waktu, menjawab
+pertanyaan perawatan kulit lewat chatbot AI, dan merekomendasikan produk
+perawatan lewat marketplace.
 
-DB-dependent endpoints return `503 {"detail": "Database unavailable"}`
-as JSON when the database cannot be reached, instead of a 500 page.
+## Fitur Utama
 
-## Auth & CORS
+- **Face Scan multi-pose (12 frame)** — kamera memandu 6 pose (depan,
+  kanan, kiri, atas, bawah, close-up); wajah dideteksi dengan YuNet,
+  hanya frame yang lolos deteksi yang dianalisis.
+- **Analisis 5 kondisi kulit (AI)** — model VGG16 (`finetuned_best.h5`)
+  menghasilkan skor severity 0–100 untuk jerawat, kulit kering, kulit
+  berminyak, dark spots (flek hitam), dan kerutan; skor kesehatan
+  keseluruhan = 100 − rata-rata kelima skor. Inferensi berjalan via Modal.
+- **Laomera Asisten (chatbot AI)** — provider Gemini
+  (`gemini-3.5-flash-lite`), dengan Groq sebagai provider
+  alternatif. Chatbot membaca database langsung (tanpa angka hardcoded),
+  dilengkapi guardrail anti-karang dan toleran terhadap typo.
+- **Verifikasi akun OTP WhatsApp** — alur register → pending → OTP
+  WhatsApp 6 digit (Fonnte) → isi biodata → active. Login customer yang
+  belum terverifikasi dibatasi sampai verifikasi selesai.
+- **Notifikasi WhatsApp otomatis** — OTP verifikasi dan "Hasil scan siap"
+  saat analisis scan selesai.
+- **Dashboard & Riwayat** — dashboard dan chatbot memakai **rata-rata
+  semua scan** pengguna; riwayat scan dapat dibandingkan dengan scan
+  sebelumnya (membaik/memburuk per kondisi).
+- **Marketplace** — katalog produk perawatan kulit dengan rekomendasi
+  produk aktif per kondisi dan tautan marketplace.
+- **Panel Admin** — kelola pengguna (termasuk status verifikasi),
+  produk, audit scan, tren scan, pengaturan AI, dan monitoring percakapan
+  chatbot.
+- **CI/CD** — GitHub Actions berjalan otomatis di repo backend dan
+  frontend pada setiap push / pull request ke `main`.
 
-- Auth is the monolith's session-cookie auth: `SessionMiddleware`,
-  cookie `skincheck_session`, 7 days. `same_site` comes from env
-  `SESSION_SAME_SITE` (default `lax` for local dev; set `none` for
-  cross-site production — the app then forces `https_only=True`).
-- CORS: origins from env `FRONTEND_URL` (comma-separated, default
-  `http://localhost:3000`), `allow_credentials=True`, all methods
-  and headers allowed.
-- **Production shape (confirmed):** the frontend is live on
-  vercel.app while the API will sit on another domain, so deploy the
-  backend with `SESSION_SAME_SITE=none` and `FRONTEND_URL` set to the
-  live Vercel origin — otherwise login looks successful but the
-  session cookie is dropped and `/api/v2/me` returns 401.
+## Arsitektur & Teknologi
 
-## Run locally
+| Lapisan | Teknologi |
+|---|---|
+| Frontend | Next.js 14.2 + React 18 (deploy Vercel) |
+| Backend | FastAPI (Python, deploy Vercel) |
+| Database | TiDB (MySQL-compatible, TLS) |
+| Inferensi AI | Modal (VGG16), YuNet (deteksi wajah) |
+| Chatbot AI | Gemini / Groq |
+| OTP & notifikasi WA | Fonnte |
+| CI/CD | GitHub Actions |
+
+## Aplikasi Live
+
+- **Frontend (produksi):** https://skincheck-frontend-robimhmmd-uxs-projects.vercel.app
+- **Backend (produksi):** https://skincheck-backend-robimhmmd-uxs-projects.vercel.app
+- **Backend repo:** https://github.com/robimhmmd-ux/SkinCheck-Backend
+- **Frontend repo:** https://github.com/robimhmmd-ux/SkinCheck-Frontend
+
+> Pakai **URL produksi di atas**. Jangan pakai URL deployment lama
+> ber-hash (preview) — URL itu bisa kedaluwarsa atau menunjuk build lama.
+
+## Video Presentasi
+
+| Video | Tautan |
+|---|---|
+| Video Demonstrasi — gabungan Progres 1 (PRD & Konsep, 3–5 mnt) + Progres 2 (UML & Arsitektur, 5–7 mnt) + Final (Live Demo, 8–12 mnt), total maks. 24 menit | `[TAUTAN VIDEO — BELUM DIREKAM]` |
+
+Video diunggah ke YouTube (Unlisted/Public) atau Google Drive
+(Anyone with the link), dengan webcam aktif dan demo live real-time.
+Perekaman boleh berjeda antar segmen, hasil akhirnya satu video.
+
+## Petunjuk Instalasi (Setup Instruction)
+
+### Prasyarat
+
+- Node.js 18+ dan npm
+- Python 3.11+ dan pip (CI memakai Python 3.12)
+- Akun TiDB Cloud (database `skincheck_db`) — atau MySQL lokal
+- Kunci API Gemini (untuk chatbot) dan token Fonnte (untuk OTP WhatsApp,
+  bisa diatur lewat `.env` atau lewat pengaturan admin — bukan lewat chat)
+
+### 1. Clone kedua repo
 
 ```bash
-python -m venv venv
-# Windows: venv\Scripts\activate
-# Linux/macOS: source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # then fill in .env (see below) — never commit .env
-python setup_db.py     # creates the database + tables (+ demo accounts)
-python run.py          # http://127.0.0.1:8000
-# or: uvicorn app.main:app --host 127.0.0.1 --port 8000
+git clone https://github.com/robimhmmd-ux/SkinCheck-Backend.git
+git clone https://github.com/robimhmmd-ux/SkinCheck-Frontend.git
 ```
 
-`setup_db.py` also works against an already-created database: if the
-database already exists (e.g. created in the TiDB Cloud console), its
-`CREATE DATABASE` step may fail harmlessly and table creation still
-runs. The same schema is also available as plain SQL in
-`skincheck_setup.sql` (database + 8 tables + product/system-setting
-seeds; demo accounts are deliberately **not** in that SQL file — see
-its header comment).
+### 2. Backend (FastAPI)
 
-To seed the product catalogue only: `python seed_products.py`.
+```bash
+cd SkinCheck-Backend
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env            # lalu isi .env (lihat tabel di bawah)
+python setup_db.py              # membuat tabel (tanpa akun demo — daftar lewat register)
+python run.py                   # http://127.0.0.1:8000
+# atau: uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
 
-## .env variables
+Isi `.env` (jangan pernah commit file ini):
 
-| Variable | Required? | Notes |
-|---|---|---|
-| `SECRET_KEY` | yes | Long random string. Never use the code's insecure default. |
-| `DB_CONNECTION` | yes | `mysql` |
-| `DB_HOST` | yes | Database host (TiDB gateway or `127.0.0.1` locally) |
-| `DB_PORT` | yes | `4000` for TiDB Cloud, `3306` for local MySQL/XAMPP |
-| `DB_DATABASE` | yes | `skincheck_db` — the dedicated app database, not a system database |
-| `DB_USERNAME` | yes | Database user |
-| `DB_PASSWORD` | yes | Database password |
-| `DB_SSL` | yes for TiDB | `true` for TiDB Cloud (public endpoint requires TLS), `false` locally |
-| `DB_SSL_CA` | no | CA bundle path; empty = certifi's bundle if installed |
-| `FRONTEND_URL` | no | CORS origin(s), default `http://localhost:3000` |
-| `GEMINI_API_KEY` | optional | Needed only for assistant/AI endpoints |
-| `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_NAME` | optional | Needed only for OTP email |
-| `LLM_PROVIDER` | no | Default `gemini` |
-| `SKINCHECK_STORAGE_DIR` | no | Override for scan uploads; otherwise `storage/scans`, or `/tmp/storage/scans` when `VERCEL=1` |
+| Variabel | Keterangan |
+|---|---|
+| `SECRET_KEY` | String acak panjang (wajib; jangan pakai default) |
+| `DB_CONNECTION` | `mysql` |
+| `DB_HOST` | Host TiDB Cloud, atau `127.0.0.1` untuk lokal |
+| `DB_PORT` | `4000` (TiDB Cloud) / `3306` (MySQL lokal) |
+| `DB_DATABASE` | `skincheck_db` |
+| `DB_USERNAME` / `DB_PASSWORD` | Kredensial database |
+| `DB_SSL` | `true` untuk TiDB Cloud, `false` untuk lokal |
+| `FRONTEND_URL` | Origin frontend, mis. `http://localhost:3000` |
+| `SESSION_SAME_SITE` | `lax` untuk lokal, `none` untuk produksi lintas situs |
+| `GEMINI_API_KEY` | Kunci API Gemini (untuk chatbot) |
+| `FONNTE_TOKEN` | Token Fonnte untuk OTP WhatsApp (alternatif: isi lewat pengaturan admin) |
 
-WhatsApp (Fonnte) tokens are **not** `.env` variables: they live in
-`system_settings` via the admin dashboard, as in the monolith.
-`VECTOR_DB_URL` appears in the old `.env.example` but is never read by
-the code, so it is not listed here.
+Cek backend hidup: buka `http://127.0.0.1:8000/api/v2/health`
+(harus mengembalikan status sehat).
 
-## TiDB notes
+Catatan:
 
-TiDB Cloud is MySQL-compatible, so no driver/dialect change was needed.
-See `TIDB_SETUP.md` (carried over from the monolith) for the console
-steps. Key points: create a dedicated `skincheck_db` in the console,
-use port `4000`, set `DB_SSL=true`, and never commit `.env` or any
-file containing a password.
+- File model `.h5` (174 MB) **tidak ada di repo** dan tidak dibutuhkan
+  untuk menjalankan API — inferensi AI berjalan via Modal.
+- Untuk seeding katalog produk saja: `python seed_products.py`.
 
-## Dependencies & the model
+### 3. Frontend (Next.js)
 
-`requirements.txt` pins `fastapi==0.115.0`, `starlette==0.38.6`,
-`jinja2==3.1.4` (jinja is not used by this API-only backend — it is
-pinned only so a legacy import cannot silently pull a breaking
-version, and it can be deleted once the legacy controllers are gone).
+```bash
+cd SkinCheck-Frontend
+npm install
+cp .env.example .env.local
+# isi NEXT_PUBLIC_API_URL di .env.local dengan URL backend
+# (lokal: http://127.0.0.1:8000 — tanpa trailing slash)
+npm run dev                     # http://localhost:3000
+```
 
-`tensorflow`, `opencv-python`, and `google-generativeai` are **optional
-and lazy**: they are imported only inside service functions, never at
-app import time. The API imports and serves auth, products, history,
-and scan upload without them. The `.h5` model (174 MB) is not in this
-repo and is not needed to run the API; it is only needed by a future
-AI-analysis endpoint.
+Build produksi:
 
-## Frontend repo
+```bash
+npm run build
+npm run start
+```
 
-The frontend is a **separate repo** (Next.js). It is not in this
-folder. The frontend calls this backend's `/api/v2` endpoints with
-`credentials: "include"` (so the session cookie is sent) and the
-backend's `FRONTEND_URL` must list the frontend's origin.
+Deploy Vercel: import repo frontend sebagai project Vercel baru, isi
+environment variable `NEXT_PUBLIC_API_URL` dengan URL backend produksi,
+lalu deploy. Jangan commit `.env.local`.
+
+### 4. Verifikasi instalasi
+
+1. Buka `http://localhost:3000` — landing page Laomera tampil.
+2. Register akun baru → cek OTP WhatsApp masuk → isi biodata → login.
+3. Lakukan satu scan wajah → hasil 5 skor + skor keseluruhan tampil.
+4. Tanya Laomera Asisten, mis. kondisi kulit berdasarkan hasil scan.
+5. Login sebagai admin → cek dashboard admin, daftar pengguna, dan
+   pengaturan AI.
+
+## Pengujian & CI/CD
+
+- Unit test backend: 37 test (`pytest`, lihat folder `tests/`).
+  Jalankan lokal: `PYTHONPATH=$PWD python -m pytest tests/ -q`
+- Unit test frontend: 17 test (`vitest`, lihat `lib/scores.test.js`).
+  Jalankan lokal: `npm test`
+- Pipeline GitHub Actions (`.github/workflows/ci.yml`) berjalan di kedua
+  repo pada setiap push / pull request ke `main`: backend menjalankan
+  pytest, frontend menjalankan unit test + build Next.js.
+- Pengujian manual end-to-end (register → OTP → scan → chatbot →
+  marketplace → admin) dilakukan terhadap URL produksi sebelum video
+  demo direkam.
+
+## Dokumen Terkait
+
+- Panduan proyek: *Panduan Tugas Proyek Akhir Mandiri & Rubrik
+  Penilaian OBE, RPL (TIKB2503021)* v4 — STMIK IKMI Cirebon.
+- Dokumen PRD/SRS, SDD (UML + UI/UX), dan Laporan Pengujian/CI-CD
+  digabung dalam satu berkas PDF dan diunggah ke portal LMS (tenggat:
+  Minggu ke-16 / UAS).
+- Dokumentasi teknis backend (pemisahan dari monolit, API v2):
+  [`docs/BACKEND-TECHNICAL.md`](docs/BACKEND-TECHNICAL.md)
+
+## Lisensi
+
+Proyek akhir mata kuliah — STMIK IKMI Cirebon, 2026.

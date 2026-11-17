@@ -96,7 +96,7 @@ def test_dashboard_reports_total_users_not_customer_only(db, admin_id):
     assert "Volume Sesi Scan: 3 pemindaian" in ans
     assert "AI Success Rate: 100.0%" in ans
     assert "Katalog Formulasi: 2 produk (2 aktif di marketplace)" in ans
-    assert "Distribusi 5 Pilar" in ans and "Jerawat 34%" in ans
+    assert "Distribusi 5 Pilar" in ans and "Jerawat 40.0%" in ans  # rata-rata LIVE 1 desimal: (25+55)/2=40.0; "34%" dulu baseline hardcode (dihapus 13 Nov 2026)
     assert "Latensi Database" in ans
     assert "Menunggu verifikasi: 1 akun (ijal)" in ans
 
