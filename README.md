@@ -70,8 +70,8 @@ perawatan lewat marketplace.
 
 - **Frontend (produksi):** https://skincheck-frontend-robimhmmd-uxs-projects.vercel.app
 - **Backend (produksi):** https://skincheck-backend-robimhmmd-uxs-projects.vercel.app
-- **Backend repo:** https://github.com/robimhmmd-ux/SkinCheck-Backend
-- **Frontend repo:** https://github.com/robimhmmd-ux/SkinCheck-Frontend
+- **Backend repo:** https://github.com/robimhmmd-ux/proyek-rpl-laomera-backend
+- **Frontend repo:** https://github.com/robimhmmd-ux/proyek-rpl-laomera-frontend
 
 > Pakai **URL produksi di atas**. Jangan pakai URL deployment lama
 > ber-hash (preview) — URL itu bisa kedaluwarsa atau menunjuk build lama.
@@ -99,14 +99,14 @@ Perekaman boleh berjeda antar segmen, hasil akhirnya satu video.
 ### 1. Clone kedua repo
 
 ```bash
-git clone https://github.com/robimhmmd-ux/SkinCheck-Backend.git
-git clone https://github.com/robimhmmd-ux/SkinCheck-Frontend.git
+git clone https://github.com/robimhmmd-ux/proyek-rpl-laomera-backend.git
+git clone https://github.com/robimhmmd-ux/proyek-rpl-laomera-frontend.git
 ```
 
 ### 2. Backend (FastAPI)
 
 ```bash
-cd SkinCheck-Backend
+cd proyek-rpl-laomera-backend
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
@@ -144,7 +144,7 @@ Catatan:
 ### 3. Frontend (Next.js)
 
 ```bash
-cd SkinCheck-Frontend
+cd proyek-rpl-laomera-frontend
 npm install
 cp .env.example .env.local
 # isi NEXT_PUBLIC_API_URL di .env.local dengan URL backend
