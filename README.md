@@ -80,7 +80,7 @@ perawatan lewat marketplace.
 
 | Video | Tautan |
 |---|---|
-| Video Demonstrasi — gabungan Progres 1 (PRD & Konsep, 3–5 mnt) + Progres 2 (UML & Arsitektur, 5–7 mnt) + Final (Live Demo, 8–12 mnt), total maks. 24 menit | `[TAUTAN VIDEO — BELUM DIREKAM]` |
+| Video Demonstrasi — gabungan Progres 1 (PRD & Konsep, 3–5 mnt) + Progres 2 (UML & Arsitektur, 5–7 mnt) + Final (Live Demo, 8–12 mnt), total maks. 24 menit | https://youtu.be/G1qA7cOC3JM |
 
 Video diunggah ke YouTube (Unlisted/Public) atau Google Drive
 (Anyone with the link), dengan webcam aktif dan demo live real-time.
